@@ -104,13 +104,122 @@ extension AppCoordinator {
 
         let chatListVC = HomeViewController()
 
-//        chatListVC.onLogout = { [weak self] in
-//
-//            self?.showLogin()
-//        }
+        chatListVC.onChatSelected = { [weak self] user in
+
+            self?.showChat(with: user)
+        }
+
+        chatListVC.onNewChatTapped = { [weak self] in
+
+            self?.showNewChat()
+        }
+
+        chatListVC.onProfileTapped = { [weak self] in
+
+            self?.showProfile()
+        }
+
+        chatListVC.onIncomingMessage = { [weak self] item in
+
+            self?.showMessageBanner(for: item)
+        }
 
         navigationController.setViewControllers(
             [chatListVC],
+            animated: true
+        )
+    }
+
+    func showNewChat() {
+
+        let newChatVC = NewChatViewController()
+        let newChatNavigationController = UINavigationController(
+            rootViewController: newChatVC
+        )
+
+        newChatVC.onUserSelected = { [weak self, weak newChatNavigationController] user in
+
+            newChatNavigationController?.dismiss(animated: true) {
+                self?.showChat(with: user)
+            }
+        }
+
+        newChatVC.onCancel = { [weak newChatNavigationController] in
+
+            newChatNavigationController?.dismiss(animated: true)
+        }
+
+        navigationController.present(
+            newChatNavigationController,
+            animated: true
+        )
+    }
+
+    func showProfile() {
+
+        let profileVC = ProfileViewController()
+
+        profileVC.onLogout = { [weak self] in
+
+            self?.showLogin()
+        }
+
+        navigationController.pushViewController(
+            profileVC,
+            animated: true
+        )
+    }
+
+    /// Shows a banner for a new message, unless that chat or the chat list
+    /// is already on screen.
+    func showMessageBanner(for item: ChatListItem) {
+
+        let topViewController = navigationController.topViewController
+
+        let isChatOpen = (topViewController as? ChatViewController)?.otherUserId == item.otherUser.uid
+        let isChatListVisible = topViewController is HomeViewController
+        && navigationController.presentedViewController == nil
+
+        guard !isChatOpen,
+              !isChatListVisible,
+              let window = navigationController.view.window else {
+            return
+        }
+
+        InAppBanner.show(
+            from: item.otherUser,
+            message: item.lastMessage,
+            in: window
+        ) { [weak self] in
+
+            self?.openChatFromBanner(with: item.otherUser)
+        }
+    }
+
+    func openChatFromBanner(with user: User) {
+
+        navigationController.presentedViewController?.dismiss(animated: false)
+        navigationController.popToRootViewController(animated: false)
+
+        showChat(with: user)
+    }
+
+    func showChat(with user: User) {
+
+        guard let currentUserId = SessionManager.shared.currentUserId else {
+            showLogin()
+            return
+        }
+
+        let chatVC = ChatViewController(
+            viewModel: ChatViewModel(
+                otherUser: user,
+                currentUserId: currentUserId
+            )
+        )
+
+        navigationController.pushViewController(
+            chatVC,
             animated: true
         )
     }

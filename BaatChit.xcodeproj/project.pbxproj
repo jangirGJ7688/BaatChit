@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B451C8152FD9C85B00C3A14A /* FirebaseAI in Frameworks */ = {isa = PBXBuildFile; productRef = B451C8142FD9C85B00C3A14A /* FirebaseAI */; };
-		B451C8172FD9C85B00C3A14A /* FirebaseAILogic in Frameworks */ = {isa = PBXBuildFile; productRef = B451C8162FD9C85B00C3A14A /* FirebaseAILogic */; };
 		B451C8192FD9C85B00C3A14A /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = B451C8182FD9C85B00C3A14A /* FirebaseAnalytics */; };
 		B451C81B2FD9C85B00C3A14A /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = B451C81A2FD9C85B00C3A14A /* FirebaseAnalyticsCore */; };
 		B451C81D2FD9C85B00C3A14A /* FirebaseAnalyticsIdentitySupport in Frameworks */ = {isa = PBXBuildFile; productRef = B451C81C2FD9C85B00C3A14A /* FirebaseAnalyticsIdentitySupport */; };
@@ -37,9 +35,22 @@
 		B4FDC5922FD9BD99009FAB78 /* BaatChit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BaatChit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B4AA00012FD9D00000C3A14A /* Exceptions for "BaatChit" folder in "BaatChit" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B4FDC5912FD9BD98009FAB78 /* BaatChit */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B4FDC5942FD9BD99009FAB78 /* BaatChit */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B4AA00012FD9D00000C3A14A /* Exceptions for "BaatChit" folder in "BaatChit" target */,
+			);
 			path = BaatChit;
 			sourceTree = "<group>";
 		};
@@ -54,10 +65,8 @@
 				B451C82D2FD9C85B00C3A14A /* FirebaseFirestore in Frameworks */,
 				B451C8252FD9C85B00C3A14A /* FirebaseAuthCombine-Community in Frameworks */,
 				B451C8372FD9C85B00C3A14A /* FirebaseInstallations in Frameworks */,
-				B451C8172FD9C85B00C3A14A /* FirebaseAILogic in Frameworks */,
 				B451C81D2FD9C85B00C3A14A /* FirebaseAnalyticsIdentitySupport in Frameworks */,
 				B451C8352FD9C85B00C3A14A /* FirebaseInAppMessaging-Beta in Frameworks */,
-				B451C8152FD9C85B00C3A14A /* FirebaseAI in Frameworks */,
 				B451C8292FD9C85B00C3A14A /* FirebaseCrashlytics in Frameworks */,
 				B451C8332FD9C85B00C3A14A /* FirebaseFunctionsCombine-Community in Frameworks */,
 				B451C8432FD9C85B00C3A14A /* FirebaseStorageCombine-Community in Frameworks */,
@@ -116,8 +125,6 @@
 			);
 			name = BaatChit;
 			packageProductDependencies = (
-				B451C8142FD9C85B00C3A14A /* FirebaseAI */,
-				B451C8162FD9C85B00C3A14A /* FirebaseAILogic */,
 				B451C8182FD9C85B00C3A14A /* FirebaseAnalytics */,
 				B451C81A2FD9C85B00C3A14A /* FirebaseAnalyticsCore */,
 				B451C81C2FD9C85B00C3A14A /* FirebaseAnalyticsIdentitySupport */,
@@ -218,9 +225,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -253,9 +259,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
-				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -430,16 +435,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B451C8142FD9C85B00C3A14A /* FirebaseAI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B451C8132FD9C85B00C3A14A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAI;
-		};
-		B451C8162FD9C85B00C3A14A /* FirebaseAILogic */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B451C8132FD9C85B00C3A14A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAILogic;
-		};
 		B451C8182FD9C85B00C3A14A /* FirebaseAnalytics */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B451C8132FD9C85B00C3A14A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

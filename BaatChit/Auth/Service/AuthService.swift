@@ -8,6 +8,18 @@
 import Foundation
 import FirebaseAuth
 
+enum AuthServiceError: LocalizedError {
+
+    case missingUser
+
+    var errorDescription: String? {
+        switch self {
+        case .missingUser:
+            return "Something went wrong. Please try again."
+        }
+    }
+}
+
 protocol AuthServiceProtocol {
 
     func login(
@@ -50,6 +62,7 @@ final class AuthService: AuthServiceProtocol {
             }
 
             guard let firebaseUser = result?.user else {
+                completion(.failure(AuthServiceError.missingUser))
                 return
             }
 
@@ -81,21 +94,25 @@ final class AuthService: AuthServiceProtocol {
             }
 
             guard let firebaseUser = result?.user else {
+                completion(.failure(AuthServiceError.missingUser))
                 return
             }
 
             let changeRequest = firebaseUser.createProfileChangeRequest()
             changeRequest.displayName = name
 
-            changeRequest.commitChanges { _ in }
+            // The account already exists at this point, so a failed
+            // display-name update shouldn't fail the whole signup.
+            changeRequest.commitChanges { _ in
 
-            let user = User(
-                uid: firebaseUser.uid,
-                email: email,
-                name: name
-            )
+                let user = User(
+                    uid: firebaseUser.uid,
+                    email: email,
+                    name: name
+                )
 
-            completion(.success(user))
+                completion(.success(user))
+            }
         }
     }
 

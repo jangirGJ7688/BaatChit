@@ -54,6 +54,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneDidBecomeActive(_ scene: UIScene) {
         // Called when the scene has moved from an inactive state to an active state.
         // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
+        PresenceService.shared.setOnline(true)
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
@@ -70,6 +71,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Called as the scene transitions from the foreground to the background.
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
+
+        // Ask iOS for a few seconds so the "offline" write can finish.
+        var taskId = UIBackgroundTaskIdentifier.invalid
+
+        let endTask = {
+            guard taskId != .invalid else { return }
+            UIApplication.shared.endBackgroundTask(taskId)
+            taskId = .invalid
+        }
+
+        taskId = UIApplication.shared.beginBackgroundTask(expirationHandler: endTask)
+
+        PresenceService.shared.setOnline(false) {
+            DispatchQueue.main.async(execute: endTask)
+        }
     }
 
 

@@ -21,6 +21,19 @@ final class SessionManager {
         Auth.auth().currentUser?.uid
     }
 
+    var currentUser: User? {
+
+        guard let firebaseUser = Auth.auth().currentUser else {
+            return nil
+        }
+
+        return User(
+            uid: firebaseUser.uid,
+            email: firebaseUser.email ?? "",
+            name: firebaseUser.displayName ?? ""
+        )
+    }
+
     func logout() throws {
         try Auth.auth().signOut()
     }
