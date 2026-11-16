@@ -28,7 +28,8 @@ final class MessageCell: UITableViewCell {
 
     // MARK: - UI Components
 
-    private let bubbleView = BubbleView()
+    /// The bubble alone, used as the preview for the long-press menu.
+    let bubbleView = BubbleView()
 
     private let stackView: UIStackView = {
         let stackView = UIStackView()
@@ -102,9 +103,8 @@ final class MessageCell: UITableViewCell {
         messageLabel.isHidden = message.text.isEmpty
         timeLabel.text = message.sentAt.messageTimeText
 
-        bubbleView.backgroundColor = isMine
-        ? .systemBlue
-        : .secondarySystemGroupedBackground
+        bubbleView.gradientColors = isMine ? Theme.Colors.gradient : nil
+        bubbleView.backgroundColor = isMine ? .clear : Theme.Colors.incomingBubble
 
         messageLabel.textColor = isMine ? .white : .label
         timeLabel.textColor = isMine
@@ -242,7 +242,7 @@ private extension MessageCell {
             statusLabel.textColor = UIColor.white.withAlphaComponent(0.75)
         } else if message.isRead {
             statusLabel.text = "✓✓"
-            statusLabel.textColor = UIColor(red: 0.6, green: 0.95, blue: 1, alpha: 1)
+            statusLabel.textColor = UIColor(hex: 0x9FF3FF)
         } else {
             statusLabel.text = "✓"
             statusLabel.textColor = UIColor.white.withAlphaComponent(0.75)

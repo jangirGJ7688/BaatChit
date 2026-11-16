@@ -24,7 +24,23 @@ final class ChatViewController: UIViewController {
     private var rowsById: [String: MessageRow] = [:]
     private var hasLoadedMessages = false
     private var isNearBottom = true
-    private var lastTableHeight: CGFloat = 0
+    private var newMessagesWhileScrolledUp = 0
+    private var isScrollingToBottom = false
+
+    /// Whether the "•••" row is in the table. It follows the other person's
+    /// typing, but stays briefly after they stop, so their message can take
+    /// its place in one step instead of the table shrinking and growing.
+    private var showsTypingRow = false
+    private var hideTypingRowWorkItem: DispatchWorkItem?
+    private var isAnimatingToBottom = false
+    private var contentSizeObservation: NSKeyValueObservation?
+
+    /// Real row heights, so the table can work out where the bottom is
+    /// before every row has been on screen.
+    private var rowHeights: [String: CGFloat] = [:]
+
+    /// Rows that just arrived and should animate in when first shown.
+    private var itemIdsToAnimate = Set<String>()
 
     // Diffable data source animates new messages in instead of reloading.
     private lazy var dataSource = UITableViewDiffableDataSource<String, String>(
@@ -66,13 +82,13 @@ final class ChatViewController: UIViewController {
 
     private let nameLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 16, weight: .semibold)
+        label.font = Theme.Fonts.rounded(16, weight: .semibold)
         return label
     }()
 
     private let statusLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 12)
+        label.font = Theme.Fonts.rounded(12, weight: .medium)
         return label
     }()
 
@@ -81,21 +97,19 @@ final class ChatViewController: UIViewController {
         tableView.separatorStyle = .none
         tableView.keyboardDismissMode = .interactive
         tableView.allowsSelection = false
-        tableView.backgroundColor = .systemGroupedBackground
+        tableView.backgroundColor = .clear
         tableView.sectionHeaderTopPadding = 0
         tableView.estimatedRowHeight = 50
         tableView.estimatedSectionHeaderHeight = 36
+        tableView.contentInset.bottom = 8
         return tableView
     }()
 
+    private let backgroundView = AuroraBackgroundView(intensity: 0.45)
+
     private let inputBar = ChatInputBar()
 
-    // Fills the home-indicator area under the input bar.
-    private let bottomFillView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .systemBackground
-        return view
-    }()
+    private let scrollToBottomButton = ScrollToBottomButton()
 
     // MARK: - Init
 
@@ -142,18 +156,9 @@ final class ChatViewController: UIViewController {
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
 
-        // When the keyboard opens the table gets shorter; keep the latest
-        // messages in view instead of hiding them behind the keyboard.
-        let tableHeight = tableView.bounds.height
-
-        if tableHeight != lastTableHeight {
-
-            if isNearBottom && hasLoadedMessages {
-                scrollToBottom(animated: false)
-            }
-
-            lastTableHeight = tableHeight
-        }
+        // The keyboard, the input bar growing and the push transition all
+        // resize the table; keep the latest messages in view through them.
+        keepPinnedToBottom()
     }
 }
 
@@ -163,9 +168,30 @@ private extension ChatViewController {
 
     func setupUI() {
 
-        view.backgroundColor = .systemGroupedBackground
+        view.backgroundColor = Theme.Colors.chatBackground
+        navigationItem.largeTitleDisplayMode = .never
 
         setupTitleView()
+
+        // Hidden until the first messages are in place at the bottom.
+        tableView.alpha = 0
+
+        // iOS 26 blurs content under the top bar, which smudges the bubbles
+        // passing behind the date pills.
+        if #available(iOS 26.0, *) {
+            tableView.topEdgeEffect.isHidden = true
+        }
+
+        // Rows and headers find their real height after being laid out,
+        // which makes the content taller; stay at the bottom when it does.
+        contentSizeObservation = tableView.observe(\.contentSize, options: [.old, .new]) { [weak self] _, change in
+
+            guard change.oldValue != change.newValue else { return }
+
+            DispatchQueue.main.async {
+                self?.keepPinnedToBottom()
+            }
+        }
 
         tableView.dataSource = dataSource
         tableView.delegate = self
@@ -185,12 +211,17 @@ private extension ChatViewController {
             forHeaderFooterViewReuseIdentifier: DateHeaderView.reuseIdentifier
         )
 
-        [tableView, inputBar, bottomFillView].forEach {
+        [backgroundView, tableView, inputBar, scrollToBottomButton].forEach {
             view.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
         NSLayoutConstraint.activate([
+
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
             tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -202,10 +233,8 @@ private extension ChatViewController {
             inputBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             inputBar.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
 
-            bottomFillView.topAnchor.constraint(equalTo: inputBar.bottomAnchor),
-            bottomFillView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            bottomFillView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            bottomFillView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            scrollToBottomButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            scrollToBottomButton.bottomAnchor.constraint(equalTo: inputBar.topAnchor, constant: -14)
         ])
     }
 
@@ -238,9 +267,9 @@ private extension ChatViewController {
 
         statusLabel.text = statusText
         statusLabel.isHidden = statusText.isEmpty
-        statusLabel.textColor = viewModel.isOtherUserTyping || viewModel.otherUser.isOnline
-        ? .systemBlue
-        : .secondaryLabel
+        statusLabel.textColor = viewModel.isOtherUserTyping
+        ? Theme.Colors.brand
+        : viewModel.otherUser.isOnline ? Theme.Colors.online : .secondaryLabel
     }
 }
 
@@ -261,6 +290,12 @@ private extension ChatViewController {
         inputBar.onAttach = { [weak self] in
             self?.showPhotoPicker()
         }
+
+        scrollToBottomButton.addTarget(
+            self,
+            action: #selector(scrollToBottomTapped),
+            for: .touchUpInside
+        )
 
         // Don't mark messages as seen while the app is in the background.
         NotificationCenter.default.addObserver(
@@ -313,21 +348,148 @@ private extension ChatViewController {
         )
     }
 
+    @objc
+    func scrollToBottomTapped() {
+
+        Haptics.tap()
+
+        // Rows on the way may turn out taller than estimated, so finish
+        // with a correction once the scroll animation ends.
+        isScrollingToBottom = true
+        tableView.setContentOffset(bottomOffset, animated: true)
+    }
+
+    var bottomOffset: CGPoint {
+
+        let insets = tableView.adjustedContentInset
+        let y = tableView.contentSize.height + insets.bottom - tableView.bounds.height
+
+        return CGPoint(x: 0, y: max(y, -insets.top))
+    }
+
     func scrollToBottom(animated: Bool) {
 
-        let lastSection = tableView.numberOfSections - 1
+        isNearBottom = true
 
-        guard lastSection >= 0 else { return }
+        let startOffset = tableView.contentOffset
 
-        let lastRow = tableView.numberOfRows(inSection: lastSection) - 1
+        // Rows only know their real height once laid out, and that changes
+        // where the bottom is, so settle there over a few passes.
+        tableView.layoutIfNeeded()
 
-        guard lastRow >= 0 else { return }
+        for _ in 0..<4 {
 
-        tableView.scrollToRow(
-            at: IndexPath(row: lastRow, section: lastSection),
-            at: .bottom,
-            animated: animated
-        )
+            let offset = bottomOffset
+
+            guard abs(tableView.contentOffset.y - offset.y) > 0.5 else { break }
+
+            tableView.contentOffset = offset
+            tableView.layoutIfNeeded()
+        }
+
+        let endOffset = tableView.contentOffset
+
+        // Glide the last stretch, e.g. when a new message pushes things up.
+        guard animated,
+              abs(endOffset.y - startOffset.y) > 0.5,
+              abs(endOffset.y - startOffset.y) < tableView.bounds.height else {
+            return
+        }
+
+        tableView.contentOffset = startOffset
+        isAnimatingToBottom = true
+
+        UIView.animate(
+            withDuration: 0.32,
+            delay: 0,
+            options: [.curveEaseOut, .allowUserInteraction, .beginFromCurrentState]
+        ) {
+            self.tableView.contentOffset = endOffset
+        } completion: { _ in
+            self.isAnimatingToBottom = false
+            self.keepPinnedToBottom()
+        }
+    }
+
+    func keepPinnedToBottom() {
+
+        guard hasLoadedMessages,
+              isNearBottom,
+              !isAnimatingToBottom,
+              !isScrollingToBottom,
+              !tableView.isDragging,
+              !tableView.isDecelerating else { return }
+
+        let offset = bottomOffset
+
+        guard abs(tableView.contentOffset.y - offset.y) > 0.5 else { return }
+
+        // During the push transition this runs inside UIKit's animation, and
+        // the table would slowly drift instead of sitting at the bottom.
+        if transitionCoordinator != nil {
+            UIView.performWithoutAnimation {
+                tableView.contentOffset = offset
+            }
+        } else {
+            tableView.contentOffset = offset
+        }
+    }
+
+    func setTypingRowVisible(_ isVisible: Bool) {
+
+        guard isVisible != showsTypingRow else { return }
+
+        showsTypingRow = isVisible
+        applySnapshot()
+
+        if isNearBottom {
+            scrollToBottom(animated: true)
+        }
+    }
+
+    /// New messages rise and fade in, instead of the table's default slide.
+    func animateEntrance(of cell: UITableViewCell) {
+
+        cell.contentView.alpha = 0
+        cell.contentView.transform = CGAffineTransform(translationX: 0, y: 16)
+            .scaledBy(x: 0.96, y: 0.96)
+
+        UIView.animate(
+            withDuration: 0.45,
+            delay: 0,
+            usingSpringWithDamping: 0.8,
+            initialSpringVelocity: 0.4,
+            options: [.allowUserInteraction]
+        ) {
+            cell.contentView.alpha = 1
+            cell.contentView.transform = .identity
+        }
+    }
+
+    /// A close guess at a row's height before it has been laid out.
+    func estimatedHeight(for row: MessageRow) -> CGFloat {
+
+        let groupSpacing: CGFloat = row.isFirstInGroup ? 6 : 1
+        let footerHeight: CGFloat = 16
+
+        if let image = viewModel.image(for: row.message) {
+
+            let aspectRatio = image.size.height / max(image.size.width, 1)
+            let imageHeight = min(max(240 * aspectRatio, 140), 320)
+
+            return groupSpacing + 1 + 4 + imageHeight + 2 + footerHeight + 6
+        }
+
+        let maxTextWidth = tableView.bounds.width * 0.78 - 24
+
+        let textHeight = (row.message.text as NSString).boundingRect(
+            with: CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: [.font: UIFont.systemFont(ofSize: 16)],
+            context: nil
+        ).height
+
+        return groupSpacing + 1 + 7 + ceil(textHeight) + 2 + footerHeight + 6
     }
 }
 
@@ -350,6 +512,17 @@ private extension ChatViewController {
             .filter { id, row in rowsById[id].map { $0 != row } ?? false }
             .map(\.key)
 
+        // Animate rows that weren't there before (not on the first load).
+        if hasLoadedMessages {
+            itemIdsToAnimate = Set(newRowsById.keys).subtracting(rowsById.keys)
+
+            let wasTyping = dataSource.snapshot().indexOfSection(Self.typingSectionId) != nil
+
+            if showsTypingRow && !wasTyping {
+                itemIdsToAnimate.insert(Self.typingItemId)
+            }
+        }
+
         rowsById = newRowsById
 
         var snapshot = NSDiffableDataSourceSnapshot<String, String>()
@@ -359,14 +532,19 @@ private extension ChatViewController {
             snapshot.appendItems(section.rows.map(\.id), toSection: section.id)
         }
 
-        if viewModel.isOtherUserTyping {
+        if showsTypingRow {
             snapshot.appendSections([Self.typingSectionId])
             snapshot.appendItems([Self.typingItemId], toSection: Self.typingSectionId)
         }
 
         snapshot.reconfigureItems(changedIds)
 
-        dataSource.apply(snapshot, animatingDifferences: hasLoadedMessages)
+        // Applied without the table's own animation: its row slides fight
+        // with scrolling to the bottom. New rows animate in themselves.
+        dataSource.apply(snapshot, animatingDifferences: false)
+
+        tableView.layoutIfNeeded()
+        itemIdsToAnimate.removeAll()
     }
 }
 
@@ -387,11 +565,38 @@ private extension ChatViewController {
             let shouldScroll = isFirstLoad
             || (update.hasNewMessage && (update.isNewMessageFromCurrentUser || self.isNearBottom))
 
+            // Their new message replaces the "•••" row in the same update.
+            if update.hasNewMessage && !update.isNewMessageFromCurrentUser {
+                self.hideTypingRowWorkItem?.cancel()
+                self.showsTypingRow = false
+            }
+
+            // Messages can arrive before the screen has its final size;
+            // lay it out first so the bottom is worked out correctly.
+            if isFirstLoad {
+                self.view.layoutIfNeeded()
+            }
+
             self.applySnapshot()
             self.hasLoadedMessages = true
 
-            if shouldScroll {
-                self.scrollToBottom(animated: !isFirstLoad)
+            if isFirstLoad {
+                UIView.performWithoutAnimation {
+                    self.scrollToBottom(animated: false)
+                }
+            } else if shouldScroll {
+                self.scrollToBottom(animated: true)
+            }
+
+            if isFirstLoad {
+                UIView.animate(withDuration: 0.2) {
+                    self.tableView.alpha = 1
+                }
+            } else if !shouldScroll && update.hasNewMessage {
+                // Count what arrived while you were reading older messages.
+                self.newMessagesWhileScrolledUp += 1
+                self.scrollToBottomButton.unreadCount = self.newMessagesWhileScrolledUp
+                Haptics.tap()
             }
         }
 
@@ -399,11 +604,21 @@ private extension ChatViewController {
 
             guard let self = self else { return }
 
-            self.applySnapshot()
+            self.hideTypingRowWorkItem?.cancel()
 
-            if self.isNearBottom {
-                self.scrollToBottom(animated: true)
+            if self.viewModel.isOtherUserTyping {
+                self.setTypingRowVisible(true)
+                return
             }
+
+            // Sending a message also stops "typing", and that update usually
+            // lands just before the message itself. Wait for it.
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.setTypingRowVisible(false)
+            }
+
+            self.hideTypingRowWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: workItem)
         }
 
         viewModel.onHeaderUpdated = { [weak self] in
@@ -448,13 +663,146 @@ extension ChatViewController: UITableViewDelegate {
         : UITableView.automaticDimension
     }
 
+    func tableView(
+        _ tableView: UITableView,
+        estimatedHeightForRowAt indexPath: IndexPath
+    ) -> CGFloat {
+
+        guard let itemId = dataSource.itemIdentifier(for: indexPath) else {
+            return 50
+        }
+
+        if let height = rowHeights[itemId] {
+            return height
+        }
+
+        return rowsById[itemId].map(estimatedHeight(for:)) ?? 50
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        willDisplay cell: UITableViewCell,
+        forRowAt indexPath: IndexPath
+    ) {
+
+        guard let itemId = dataSource.itemIdentifier(for: indexPath) else { return }
+
+        rowHeights[itemId] = cell.bounds.height
+
+        if itemIdsToAnimate.remove(itemId) != nil {
+            animateEntrance(of: cell)
+        }
+    }
+
+    func tableView(
+        _ tableView: UITableView,
+        didEndDisplaying cell: UITableViewCell,
+        forRowAt indexPath: IndexPath
+    ) {
+
+        // Clear any entrance animation cut short, so reused cells look right.
+        cell.contentView.layer.removeAllAnimations()
+        cell.contentView.alpha = 1
+        cell.contentView.transform = .identity
+    }
+
+    func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
+        keepPinnedToBottom()
+    }
+
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+
+        guard isScrollingToBottom else { return }
+
+        isScrollingToBottom = false
+        scrollToBottom(animated: true)
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        isScrollingToBottom = false
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
 
-        let distanceFromBottom = scrollView.contentSize.height
-        - scrollView.contentOffset.y
-        - scrollView.bounds.height
+        let distanceFromBottom = bottomOffset.y - scrollView.contentOffset.y
 
-        isNearBottom = distanceFromBottom < 120
+        // Only you scrolling decides whether we stay pinned to the bottom.
+        // Layout changes (first load, keyboard, rows resizing) also move the
+        // offset, and must not unpin it.
+        if scrollView.isDragging || scrollView.isDecelerating {
+            isNearBottom = distanceFromBottom < 120
+        }
+
+        if isNearBottom {
+            newMessagesWhileScrolledUp = 0
+            scrollToBottomButton.unreadCount = 0
+        }
+
+        // Only offer the button once you're well away from the newest messages.
+        scrollToBottomButton.setVisible(distanceFromBottom > 400)
+    }
+
+    // MARK: - Long-Press Menu
+
+    func tableView(
+        _ tableView: UITableView,
+        contextMenuConfigurationForRowAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+
+        guard let itemId = dataSource.itemIdentifier(for: indexPath),
+              let message = rowsById[itemId]?.message else {
+            return nil
+        }
+
+        return UIContextMenuConfiguration(
+            identifier: indexPath as NSIndexPath,
+            previewProvider: nil
+        ) { [weak self] _ in
+
+            var actions: [UIAction] = []
+
+            if !message.text.isEmpty {
+                actions.append(
+                    UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in
+                        UIPasteboard.general.string = message.text
+                    }
+                )
+            }
+
+            if let image = self?.viewModel.image(for: message) {
+                actions.append(
+                    UIAction(title: "Copy Photo", image: UIImage(systemName: "photo")) { _ in
+                        UIPasteboard.general.image = image
+                    }
+                )
+
+                actions.append(
+                    UIAction(title: "View Photo", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) { _ in
+                        self?.showImageViewer(image)
+                    }
+                )
+            }
+
+            return UIMenu(children: actions)
+        }
+    }
+
+    /// Lifts just the bubble, not the whole row, when long-pressed.
+    func tableView(
+        _ tableView: UITableView,
+        previewForHighlightingContextMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+
+        guard let indexPath = configuration.identifier as? IndexPath,
+              let cell = tableView.cellForRow(at: indexPath) as? MessageCell else {
+            return nil
+        }
+
+        let parameters = UIPreviewParameters()
+        parameters.backgroundColor = .clear
+
+        return UITargetedPreview(view: cell.bubbleView, parameters: parameters)
     }
 }
 

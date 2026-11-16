@@ -15,51 +15,32 @@ final class ForgotPasswordViewController: UIViewController {
 
     var onBackToLogin: (() -> Void)?
 
+    private var hasAnimatedIn = false
+    private var hasSentLink = false
+
     // MARK: - UI Components
 
-    private let titleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Forgot Password?"
-        label.font = .systemFont(ofSize: 32, weight: .bold)
-        return label
-    }()
-
-    private let subtitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Enter your email address and we'll send you a password reset link."
-        label.textColor = .secondaryLabel
-        label.numberOfLines = 0
-        return label
-    }()
-
-    private lazy var emailTextField = AuthTextField.make(
-        placeholder: "Email Address",
-        imageName: "envelope"
+    private let formView = AuthFormView(
+        headerView: AuthHeaderView(
+            title: "Forgot password?",
+            subtitle: "Enter your email and we'll send you a link to reset it.",
+            showsBackButton: true
+        )
     )
 
-    private let resetButton: UIButton = {
-        let button = UIButton(type: .system)
+    private let emailField = FormField(
+        placeholder: "Email address",
+        iconName: "envelope.fill",
+        kind: .email
+    )
 
-        button.setTitle("Send Reset Link", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-        button.backgroundColor = .systemBlue
+    private let messageView = InlineMessageView()
 
-        button.layer.cornerRadius = 14
-        button.titleLabel?.font = .boldSystemFont(ofSize: 18)
+    private let resetButton = PrimaryButton(title: "Send Reset Link")
 
-        return button
-    }()
-
-    private let backButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        button.setTitle("Back to Login", for: .normal)
-
-        return button
-    }()
-
-    private let activityIndicator = UIActivityIndicatorView(
-        style: .large
+    private let backButton = AuthFooterButton(
+        question: "Remembered it?",
+        action: "Log In"
     )
 
     // MARK: - Init
@@ -77,6 +58,10 @@ final class ForgotPasswordViewController: UIViewController {
 
     // MARK: - Lifecycle
 
+    override func loadView() {
+        view = formView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -84,187 +69,103 @@ final class ForgotPasswordViewController: UIViewController {
         setupActions()
         bindViewModel()
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard !hasAnimatedIn else { return }
+
+        hasAnimatedIn = true
+        formView.animateIn()
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        .lightContent
+    }
 }
+
+// MARK: - Setup UI
 
 private extension ForgotPasswordViewController {
 
     func setupUI() {
 
-        view.backgroundColor = .systemBackground
+        emailField.returnKeyType = .send
 
-        [
-            titleLabel,
-            subtitleLabel,
-            emailTextField,
-            resetButton,
-            backButton,
-            activityIndicator
-        ].forEach {
-
-            view.addSubview($0)
-            $0.translatesAutoresizingMaskIntoConstraints = false
+        [emailField, messageView, resetButton, backButton].forEach {
+            formView.formStack.addArrangedSubview($0)
         }
 
-        NSLayoutConstraint.activate([
-
-            titleLabel.topAnchor.constraint(
-                equalTo: view.safeAreaLayoutGuide.topAnchor,
-                constant: 80
-            ),
-
-            titleLabel.leadingAnchor.constraint(
-                equalTo: view.leadingAnchor,
-                constant: 24
-            ),
-
-            subtitleLabel.topAnchor.constraint(
-                equalTo: titleLabel.bottomAnchor,
-                constant: 12
-            ),
-
-            subtitleLabel.leadingAnchor.constraint(
-                equalTo: titleLabel.leadingAnchor
-            ),
-
-            subtitleLabel.trailingAnchor.constraint(
-                equalTo: view.trailingAnchor,
-                constant: -24
-            ),
-
-            emailTextField.topAnchor.constraint(
-                equalTo: subtitleLabel.bottomAnchor,
-                constant: 40
-            ),
-
-            emailTextField.leadingAnchor.constraint(
-                equalTo: titleLabel.leadingAnchor
-            ),
-
-            emailTextField.trailingAnchor.constraint(
-                equalTo: subtitleLabel.trailingAnchor
-            ),
-
-            emailTextField.heightAnchor.constraint(
-                equalToConstant: 56
-            ),
-
-            resetButton.topAnchor.constraint(
-                equalTo: emailTextField.bottomAnchor,
-                constant: 30
-            ),
-
-            resetButton.leadingAnchor.constraint(
-                equalTo: emailTextField.leadingAnchor
-            ),
-
-            resetButton.trailingAnchor.constraint(
-                equalTo: emailTextField.trailingAnchor
-            ),
-
-            resetButton.heightAnchor.constraint(
-                equalToConstant: 56
-            ),
-
-            backButton.topAnchor.constraint(
-                equalTo: resetButton.bottomAnchor,
-                constant: 20
-            ),
-
-            backButton.centerXAnchor.constraint(
-                equalTo: view.centerXAnchor
-            ),
-
-            activityIndicator.centerXAnchor.constraint(
-                equalTo: view.centerXAnchor
-            ),
-
-            activityIndicator.centerYAnchor.constraint(
-                equalTo: view.centerYAnchor
-            )
-        ])
+        formView.formStack.setCustomSpacing(20, after: emailField)
+        formView.formStack.setCustomSpacing(20, after: messageView)
+        formView.formStack.setCustomSpacing(24, after: resetButton)
     }
 }
+
+// MARK: - Actions
 
 private extension ForgotPasswordViewController {
 
     func setupActions() {
 
-        resetButton.addTarget(
-            self,
-            action: #selector(resetTapped),
-            for: .touchUpInside
-        )
+        resetButton.addTarget(self, action: #selector(resetTapped), for: .touchUpInside)
+        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
 
-        backButton.addTarget(
-            self,
-            action: #selector(backTapped),
-            for: .touchUpInside
-        )
+        formView.headerView.onBack = { [weak self] in
+            self?.onBackToLogin?()
+        }
+
+        emailField.onReturn = { [weak self] in
+            self?.resetTapped()
+        }
+
+        emailField.onTextChange = { [weak self] in
+            self?.messageView.hide()
+        }
     }
 
     @objc
     func resetTapped() {
 
-        viewModel.resetPassword(
-            email: emailTextField.text
-        )
+        // After the link is sent, the button takes you back to login.
+        guard !hasSentLink else {
+            onBackToLogin?()
+            return
+        }
+
+        view.endEditing(true)
+
+        viewModel.resetPassword(email: emailField.text)
     }
 
     @objc
     func backTapped() {
-
         onBackToLogin?()
     }
+}
+
+// MARK: - ViewModel Binding
+
+private extension ForgotPasswordViewController {
 
     func bindViewModel() {
 
         viewModel.onLoadingStateChange = { [weak self] isLoading in
-
-            if isLoading {
-                self?.activityIndicator.startAnimating()
-                self?.resetButton.isEnabled = false
-            } else {
-                self?.activityIndicator.stopAnimating()
-                self?.resetButton.isEnabled = true
-            }
+            self?.resetButton.isLoading = isLoading
         }
 
         viewModel.onSuccess = { [weak self] message in
 
-            let alert = UIAlertController(
-                title: "Success",
-                message: message,
-                preferredStyle: .alert
-            )
+            guard let self = self else { return }
 
-            alert.addAction(
-                UIAlertAction(
-                    title: "OK",
-                    style: .default
-                ) { _ in
-                    self?.onBackToLogin?()
-                }
-            )
-
-            self?.present(alert, animated: true)
+            self.hasSentLink = true
+            self.messageView.show(message, style: .success)
+            self.resetButton.setTitle("Back to Log In", for: .normal)
+            self.backButton.isHidden = true
         }
 
         viewModel.onError = { [weak self] message in
-
-            let alert = UIAlertController(
-                title: "Error",
-                message: message,
-                preferredStyle: .alert
-            )
-
-            alert.addAction(
-                UIAlertAction(
-                    title: "OK",
-                    style: .default
-                )
-            )
-
-            self?.present(alert, animated: true)
+            self?.messageView.show(message, style: .error)
         }
     }
 }

@@ -16,85 +16,50 @@ final class SignupViewController: UIViewController {
     var onSignupSuccess: (() -> Void)?
     var onLoginTapped: (() -> Void)?
 
-    // MARK: - UI
+    private var hasAnimatedIn = false
 
-    private let scrollView = UIScrollView()
-    private let contentView = UIView()
+    // MARK: - UI Components
 
-    private let titleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Create Account"
-        label.font = .systemFont(ofSize: 32, weight: .bold)
-        return label
-    }()
-
-    private let subtitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Join BaatChit today"
-        label.textColor = .secondaryLabel
-        return label
-    }()
-
-    private lazy var nameTextField = AuthTextField.make(
-        placeholder: "Full Name",
-        imageName: "person"
-    )
-
-    private lazy var emailTextField = AuthTextField.make(
-        placeholder: "Email Address",
-        imageName: "envelope"
-    )
-
-    private lazy var passwordTextField = AuthTextField.make(
-        placeholder: "Password",
-        imageName: "lock"
-    )
-
-    private lazy var confirmPasswordTextField = AuthTextField.make(
-        placeholder: "Confirm Password",
-        imageName: "lock"
-    )
-
-    private let signupButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        button.setTitle("Create Account", for: .normal)
-        button.setTitleColor(.white, for: .normal)
-
-        button.backgroundColor = .systemBlue
-        button.layer.cornerRadius = 14
-
-        button.titleLabel?.font = .boldSystemFont(ofSize: 18)
-
-        return button
-    }()
-
-    private let loginButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        let attributed = NSMutableAttributedString(
-            string: "Already have an account? ",
-            attributes: [
-                .foregroundColor: UIColor.secondaryLabel
-            ]
+    private let formView = AuthFormView(
+        headerView: AuthHeaderView(
+            title: "Create account",
+            subtitle: "Join BaatChit and start chatting",
+            showsBackButton: true
         )
+    )
 
-        attributed.append(
-            NSAttributedString(
-                string: "Login",
-                attributes: [
-                    .foregroundColor: UIColor.systemBlue,
-                    .font: UIFont.boldSystemFont(ofSize: 16)
-                ]
-            )
-        )
+    private let nameField = FormField(
+        placeholder: "Full name",
+        iconName: "person.fill",
+        kind: .name
+    )
 
-        button.setAttributedTitle(attributed, for: .normal)
+    private let emailField = FormField(
+        placeholder: "Email address",
+        iconName: "envelope.fill",
+        kind: .email
+    )
 
-        return button
-    }()
+    private let passwordField = FormField(
+        placeholder: "Password (6+ characters)",
+        iconName: "lock.fill",
+        kind: .newPassword
+    )
 
-    private let activityIndicator = UIActivityIndicatorView(style: .large)
+    private let confirmPasswordField = FormField(
+        placeholder: "Confirm password",
+        iconName: "lock.rotation",
+        kind: .newPassword
+    )
+
+    private let messageView = InlineMessageView()
+
+    private let signupButton = PrimaryButton(title: "Create Account")
+
+    private let loginButton = AuthFooterButton(
+        question: "Already have an account?",
+        action: "Log In"
+    )
 
     // MARK: - Init
 
@@ -109,6 +74,10 @@ final class SignupViewController: UIViewController {
 
     // MARK: - Lifecycle
 
+    override func loadView() {
+        view = formView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -116,151 +85,120 @@ final class SignupViewController: UIViewController {
         setupActions()
         bindViewModel()
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard !hasAnimatedIn else { return }
+
+        hasAnimatedIn = true
+        formView.animateIn()
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        .lightContent
+    }
 }
+
+// MARK: - Setup UI
 
 private extension SignupViewController {
 
     func setupUI() {
 
-        view.backgroundColor = .systemBackground
-
-        passwordTextField.isSecureTextEntry = true
-        confirmPasswordTextField.isSecureTextEntry = true
-
-        view.addSubview(scrollView)
-        scrollView.addSubview(contentView)
-
-        [
-            titleLabel,
-            subtitleLabel,
-            nameTextField,
-            emailTextField,
-            passwordTextField,
-            confirmPasswordTextField,
-            signupButton,
-            loginButton,
-            activityIndicator
-        ].forEach {
-            contentView.addSubview($0)
-            $0.translatesAutoresizingMaskIntoConstraints = false
+        [nameField, emailField, passwordField].forEach {
+            $0.returnKeyType = .next
         }
 
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.translatesAutoresizingMaskIntoConstraints = false
+        confirmPasswordField.returnKeyType = .go
 
-        NSLayoutConstraint.activate([
+        [
+            nameField,
+            emailField,
+            passwordField,
+            confirmPasswordField,
+            messageView,
+            signupButton,
+            loginButton
+        ].forEach {
+            formView.formStack.addArrangedSubview($0)
+        }
 
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
-
-            titleLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 80),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-
-            nameTextField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 40),
-            nameTextField.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            nameTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            nameTextField.heightAnchor.constraint(equalToConstant: 56),
-
-            emailTextField.topAnchor.constraint(equalTo: nameTextField.bottomAnchor, constant: 16),
-            emailTextField.leadingAnchor.constraint(equalTo: nameTextField.leadingAnchor),
-            emailTextField.trailingAnchor.constraint(equalTo: nameTextField.trailingAnchor),
-            emailTextField.heightAnchor.constraint(equalToConstant: 56),
-
-            passwordTextField.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 16),
-            passwordTextField.leadingAnchor.constraint(equalTo: nameTextField.leadingAnchor),
-            passwordTextField.trailingAnchor.constraint(equalTo: nameTextField.trailingAnchor),
-            passwordTextField.heightAnchor.constraint(equalToConstant: 56),
-
-            confirmPasswordTextField.topAnchor.constraint(equalTo: passwordTextField.bottomAnchor, constant: 16),
-            confirmPasswordTextField.leadingAnchor.constraint(equalTo: nameTextField.leadingAnchor),
-            confirmPasswordTextField.trailingAnchor.constraint(equalTo: nameTextField.trailingAnchor),
-            confirmPasswordTextField.heightAnchor.constraint(equalToConstant: 56),
-
-            signupButton.topAnchor.constraint(equalTo: confirmPasswordTextField.bottomAnchor, constant: 30),
-            signupButton.leadingAnchor.constraint(equalTo: nameTextField.leadingAnchor),
-            signupButton.trailingAnchor.constraint(equalTo: nameTextField.trailingAnchor),
-            signupButton.heightAnchor.constraint(equalToConstant: 56),
-
-            loginButton.topAnchor.constraint(equalTo: signupButton.bottomAnchor, constant: 24),
-            loginButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            loginButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
-
-            activityIndicator.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
-        ])
+        formView.formStack.setCustomSpacing(20, after: confirmPasswordField)
+        formView.formStack.setCustomSpacing(20, after: messageView)
+        formView.formStack.setCustomSpacing(24, after: signupButton)
     }
-    
 }
+
+// MARK: - Actions
 
 private extension SignupViewController {
 
     func setupActions() {
 
-        signupButton.addTarget(
-            self,
-            action: #selector(signupTapped),
-            for: .touchUpInside
-        )
+        signupButton.addTarget(self, action: #selector(signupTapped), for: .touchUpInside)
+        loginButton.addTarget(self, action: #selector(loginTapped), for: .touchUpInside)
 
-        loginButton.addTarget(
-            self,
-            action: #selector(loginTapped),
-            for: .touchUpInside
-        )
+        formView.headerView.onBack = { [weak self] in
+            self?.onLoginTapped?()
+        }
+
+        // Return moves to the next field, then submits.
+        let fields = [nameField, emailField, passwordField, confirmPasswordField]
+
+        for (index, field) in fields.enumerated() {
+
+            field.onReturn = { [weak self] in
+
+                if index < fields.count - 1 {
+                    fields[index + 1].becomeFirstResponder()
+                } else {
+                    self?.signupTapped()
+                }
+            }
+
+            field.onTextChange = { [weak self] in
+                self?.messageView.hide()
+            }
+        }
     }
 
     @objc
     func signupTapped() {
 
+        view.endEditing(true)
+
         viewModel.signup(
-            name: nameTextField.text,
-            email: emailTextField.text,
-            password: passwordTextField.text,
-            confirmPassword: confirmPasswordTextField.text
+            name: nameField.text,
+            email: emailField.text,
+            password: passwordField.text,
+            confirmPassword: confirmPasswordField.text
         )
     }
 
     @objc
     func loginTapped() {
-
         onLoginTapped?()
     }
+}
+
+// MARK: - ViewModel Binding
+
+private extension SignupViewController {
 
     func bindViewModel() {
 
-        viewModel.onLoadingStateChange = { [weak self] loading in
-
-            loading
-            ? self?.activityIndicator.startAnimating()
-            : self?.activityIndicator.stopAnimating()
+        viewModel.onLoadingStateChange = { [weak self] isLoading in
+            self?.signupButton.isLoading = isLoading
         }
 
         viewModel.onSignupSuccess = { [weak self] in
+            Haptics.success()
             self?.onSignupSuccess?()
         }
 
         viewModel.onError = { [weak self] message in
-
-            let alert = UIAlertController(
-                title: "Error",
-                message: message,
-                preferredStyle: .alert
-            )
-
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-
-            self?.present(alert, animated: true)
+            self?.messageView.show(message, style: .error)
         }
     }
 }

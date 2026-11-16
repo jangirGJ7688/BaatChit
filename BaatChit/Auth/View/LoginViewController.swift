@@ -17,97 +17,45 @@ final class LoginViewController: UIViewController {
     var onSignupTapped: (() -> Void)?
     var onForgotPasswordTapped: (() -> Void)?
 
+    private var hasAnimatedIn = false
+
     // MARK: - UI Components
 
-    private let scrollView = UIScrollView()
-
-    private let contentView = UIView()
-
-    private let logoLabel: UILabel = {
-        let label = UILabel()
-        label.text = "💬 BaatChit"
-        label.font = .systemFont(ofSize: 36, weight: .bold)
-        label.textAlignment = .center
-        return label
-    }()
-
-    private let titleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Welcome Back"
-        label.font = .systemFont(ofSize: 30, weight: .bold)
-        return label
-    }()
-
-    private let subtitleLabel: UILabel = {
-        let label = UILabel()
-        label.text = "Login to continue chatting"
-        label.font = .systemFont(ofSize: 16)
-        label.textColor = .secondaryLabel
-        return label
-    }()
-
-    private lazy var emailTextField = AuthTextField.make(
-        placeholder: "Email Address",
-        imageName: "envelope"
+    private let formView = AuthFormView(
+        headerView: AuthHeaderView(
+            title: "Welcome back 👋",
+            subtitle: "Log in to continue chatting"
+        )
     )
 
-    private lazy var passwordTextField = AuthTextField.make(
+    private let emailField = FormField(
+        placeholder: "Email address",
+        iconName: "envelope.fill",
+        kind: .email
+    )
+
+    private let passwordField = FormField(
         placeholder: "Password",
-        imageName: "lock"
+        iconName: "lock.fill",
+        kind: .password
     )
 
     private let forgotPasswordButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Forgot Password?", for: .normal)
-        button.contentHorizontalAlignment = .right
+        button.setTitle("Forgot password?", for: .normal)
+        button.titleLabel?.font = Theme.Fonts.rounded(15, weight: .semibold)
+        button.contentHorizontalAlignment = .trailing
         return button
     }()
 
-    private let loginButton: UIButton = {
-        let button = UIButton(type: .system)
+    private let messageView = InlineMessageView()
 
-        button.setTitle("Login", for: .normal)
-        button.setTitleColor(.white, for: .normal)
+    private let loginButton = PrimaryButton(title: "Log In")
 
-        button.backgroundColor = .systemBlue
-        button.layer.cornerRadius = 14
-
-        button.titleLabel?.font = .boldSystemFont(ofSize: 18)
-
-        button.layer.shadowColor = UIColor.systemBlue.cgColor
-        button.layer.shadowOpacity = 0.25
-        button.layer.shadowOffset = CGSize(width: 0, height: 5)
-        button.layer.shadowRadius = 8
-
-        return button
-    }()
-
-    private let signupButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        let attributedText = NSMutableAttributedString(
-            string: "Don't have an account? ",
-            attributes: [
-                .foregroundColor: UIColor.secondaryLabel
-            ]
-        )
-
-        attributedText.append(
-            NSAttributedString(
-                string: "Sign Up",
-                attributes: [
-                    .foregroundColor: UIColor.systemBlue,
-                    .font: UIFont.boldSystemFont(ofSize: 16)
-                ]
-            )
-        )
-
-        button.setAttributedTitle(attributedText, for: .normal)
-
-        return button
-    }()
-
-    private let activityIndicator = UIActivityIndicatorView(style: .large)
+    private let signupButton = AuthFooterButton(
+        question: "Don't have an account?",
+        action: "Sign Up"
+    )
 
     // MARK: - Init
 
@@ -122,6 +70,10 @@ final class LoginViewController: UIViewController {
 
     // MARK: - Lifecycle
 
+    override func loadView() {
+        view = formView
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -135,6 +87,19 @@ final class LoginViewController: UIViewController {
 
         navigationController?.setNavigationBarHidden(true, animated: animated)
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard !hasAnimatedIn else { return }
+
+        hasAnimatedIn = true
+        formView.animateIn()
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        .lightContent
+    }
 }
 
 // MARK: - Setup UI
@@ -143,78 +108,24 @@ private extension LoginViewController {
 
     func setupUI() {
 
-        view.backgroundColor = .systemBackground
-
-        passwordTextField.isSecureTextEntry = true
-
-        view.addSubview(scrollView)
-        scrollView.addSubview(contentView)
+        emailField.returnKeyType = .next
+        passwordField.returnKeyType = .go
 
         [
-            logoLabel,
-            titleLabel,
-            subtitleLabel,
-            emailTextField,
-            passwordTextField,
+            emailField,
+            passwordField,
             forgotPasswordButton,
+            messageView,
             loginButton,
-            signupButton,
-            activityIndicator
+            signupButton
         ].forEach {
-            contentView.addSubview($0)
-            $0.translatesAutoresizingMaskIntoConstraints = false
+            formView.formStack.addArrangedSubview($0)
         }
 
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-
-        NSLayoutConstraint.activate([
-
-            scrollView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-
-            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
-
-            logoLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 80),
-            logoLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-
-            titleLabel.topAnchor.constraint(equalTo: logoLabel.bottomAnchor, constant: 50),
-            titleLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-
-            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 8),
-            subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-
-            emailTextField.topAnchor.constraint(equalTo: subtitleLabel.bottomAnchor, constant: 40),
-            emailTextField.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
-            emailTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
-            emailTextField.heightAnchor.constraint(equalToConstant: 56),
-
-            passwordTextField.topAnchor.constraint(equalTo: emailTextField.bottomAnchor, constant: 16),
-            passwordTextField.leadingAnchor.constraint(equalTo: emailTextField.leadingAnchor),
-            passwordTextField.trailingAnchor.constraint(equalTo: emailTextField.trailingAnchor),
-            passwordTextField.heightAnchor.constraint(equalToConstant: 56),
-
-            forgotPasswordButton.topAnchor.constraint(equalTo: passwordTextField.bottomAnchor, constant: 12),
-            forgotPasswordButton.trailingAnchor.constraint(equalTo: passwordTextField.trailingAnchor),
-
-            loginButton.topAnchor.constraint(equalTo: forgotPasswordButton.bottomAnchor, constant: 24),
-            loginButton.leadingAnchor.constraint(equalTo: emailTextField.leadingAnchor),
-            loginButton.trailingAnchor.constraint(equalTo: emailTextField.trailingAnchor),
-            loginButton.heightAnchor.constraint(equalToConstant: 56),
-
-            signupButton.topAnchor.constraint(equalTo: loginButton.bottomAnchor, constant: 24),
-            signupButton.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            signupButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -40),
-
-            activityIndicator.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: contentView.centerYAnchor)
-        ])
+        formView.formStack.setCustomSpacing(4, after: passwordField)
+        formView.formStack.setCustomSpacing(20, after: forgotPasswordButton)
+        formView.formStack.setCustomSpacing(20, after: messageView)
+        formView.formStack.setCustomSpacing(24, after: loginButton)
     }
 }
 
@@ -224,31 +135,34 @@ private extension LoginViewController {
 
     func setupActions() {
 
-        loginButton.addTarget(
-            self,
-            action: #selector(loginTapped),
-            for: .touchUpInside
-        )
+        loginButton.addTarget(self, action: #selector(loginTapped), for: .touchUpInside)
+        signupButton.addTarget(self, action: #selector(signupTapped), for: .touchUpInside)
+        forgotPasswordButton.addTarget(self, action: #selector(forgotPasswordTapped), for: .touchUpInside)
 
-        signupButton.addTarget(
-            self,
-            action: #selector(signupTapped),
-            for: .touchUpInside
-        )
+        emailField.onReturn = { [weak self] in
+            self?.passwordField.becomeFirstResponder()
+        }
 
-        forgotPasswordButton.addTarget(
-            self,
-            action: #selector(forgotPasswordTapped),
-            for: .touchUpInside
-        )
+        passwordField.onReturn = { [weak self] in
+            self?.loginTapped()
+        }
+
+        // Typing again clears the last error.
+        [emailField, passwordField].forEach {
+            $0.onTextChange = { [weak self] in
+                self?.messageView.hide()
+            }
+        }
     }
 
     @objc
     func loginTapped() {
 
+        view.endEditing(true)
+
         viewModel.login(
-            email: emailTextField.text,
-            password: passwordTextField.text
+            email: emailField.text,
+            password: passwordField.text
         )
     }
 
@@ -270,36 +184,16 @@ private extension LoginViewController {
     func bindViewModel() {
 
         viewModel.onLoadingStateChange = { [weak self] isLoading in
-
-            if isLoading {
-                self?.activityIndicator.startAnimating()
-                self?.loginButton.isEnabled = false
-            } else {
-                self?.activityIndicator.stopAnimating()
-                self?.loginButton.isEnabled = true
-            }
+            self?.loginButton.isLoading = isLoading
         }
 
         viewModel.onLoginSuccess = { [weak self] in
+            Haptics.success()
             self?.onLoginSuccess?()
         }
 
         viewModel.onError = { [weak self] message in
-
-            let alert = UIAlertController(
-                title: "Error",
-                message: message,
-                preferredStyle: .alert
-            )
-
-            alert.addAction(
-                UIAlertAction(
-                    title: "OK",
-                    style: .default
-                )
-            )
-
-            self?.present(alert, animated: true)
+            self?.messageView.show(message, style: .error)
         }
     }
 }

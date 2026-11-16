@@ -16,14 +16,14 @@ final class DateHeaderView: UITableViewHeaderFooterView {
 
     private let pillView: UIView = {
         let view = UIView()
-        view.backgroundColor = .tertiarySystemGroupedBackground
+        view.backgroundColor = Theme.Colors.incomingBubble.withAlphaComponent(0.9)
         view.layer.cornerRadius = 10
         return view
     }()
 
     private let titleLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 12, weight: .semibold)
+        label.font = Theme.Fonts.rounded(12, weight: .semibold)
         label.textColor = .secondaryLabel
         return label
     }()

@@ -55,7 +55,7 @@ private extension TypingIndicatorCell {
         selectionStyle = .none
         backgroundColor = .clear
 
-        bubbleView.backgroundColor = .secondarySystemGroupedBackground
+        bubbleView.backgroundColor = Theme.Colors.incomingBubble
 
         let dotsStack = UIStackView(arrangedSubviews: dots)
         dotsStack.axis = .horizontal

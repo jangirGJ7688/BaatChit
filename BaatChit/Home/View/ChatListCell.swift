@@ -7,45 +7,57 @@
 
 import UIKit
 
+/// One chat on Home, shown as a frosted-glass card. Chats with unread
+/// messages get a glowing edge.
 final class ChatListCell: UITableViewCell {
 
     static let reuseIdentifier = "ChatListCell"
 
     // MARK: - UI Components
 
+    private let cardView: UIView = {
+        let view = UIView()
+        view.backgroundColor = Theme.Colors.card
+        view.layer.cornerRadius = 22
+        view.layer.borderWidth = 1
+        view.layer.borderColor = Theme.Colors.cardBorder.cgColor
+        return view
+    }()
+
     private let avatarView = AvatarView()
 
     private let nameLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 17, weight: .semibold)
+        label.font = Theme.Fonts.rounded(17, weight: .semibold)
+        label.textColor = .white
         return label
     }()
 
     private let messageLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 15)
-        label.textColor = .secondaryLabel
+        label.font = Theme.Fonts.rounded(15)
+        label.textColor = Theme.Colors.secondaryText
         return label
     }()
 
     private let timeLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 13)
-        label.textColor = .secondaryLabel
+        label.font = Theme.Fonts.rounded(13, weight: .medium)
+        label.textColor = Theme.Colors.secondaryText
         label.setContentCompressionResistancePriority(.required, for: .horizontal)
         return label
     }()
 
-    private let badgeView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .systemBlue
-        view.layer.cornerRadius = 10
+    private let badgeView: GradientView = {
+        let view = GradientView()
+        view.layer.cornerRadius = 11
+        view.clipsToBounds = true
         return view
     }()
 
     private let badgeLabel: UILabel = {
         let label = UILabel()
-        label.font = .boldSystemFont(ofSize: 12)
+        label.font = Theme.Fonts.rounded(12, weight: .bold)
         label.textColor = .white
         label.textAlignment = .center
         return label
@@ -66,6 +78,20 @@ final class ChatListCell: UITableViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
+    // MARK: - Press Feedback
+
+    override func setHighlighted(_ highlighted: Bool, animated: Bool) {
+        super.setHighlighted(highlighted, animated: animated)
+
+        cardView.animatePress(highlighted)
+
+        UIView.animate(withDuration: 0.2) {
+            self.cardView.backgroundColor = highlighted
+            ? UIColor(white: 1, alpha: 0.11)
+            : Theme.Colors.card
+        }
+    }
+
     // MARK: - Configure
 
     func configure(with item: ChatListItem) {
@@ -77,22 +103,27 @@ final class ChatListCell: UITableViewCell {
 
         let hasUnread = item.unreadCount > 0
 
-        // Unread chats stand out, like in other chat apps.
-        nameLabel.font = .systemFont(ofSize: 17, weight: hasUnread ? .bold : .semibold)
+        nameLabel.font = Theme.Fonts.rounded(17, weight: hasUnread ? .bold : .semibold)
 
         if item.isOtherUserTyping {
             messageLabel.text = "typing..."
-            messageLabel.textColor = .systemBlue
-            messageLabel.font = .italicSystemFont(ofSize: 15)
+            messageLabel.textColor = Theme.Colors.brand
+            messageLabel.font = Theme.Fonts.rounded(15, weight: .semibold)
         } else {
             messageLabel.text = item.lastMessage
-            messageLabel.textColor = hasUnread ? .label : .secondaryLabel
-            messageLabel.font = .systemFont(ofSize: 15, weight: hasUnread ? .medium : .regular)
+            messageLabel.textColor = hasUnread ? .white : Theme.Colors.secondaryText
+            messageLabel.font = Theme.Fonts.rounded(15, weight: hasUnread ? .medium : .regular)
         }
 
         badgeView.isHidden = !hasUnread
         badgeLabel.text = item.unreadCount > 99 ? "99+" : "\(item.unreadCount)"
-        timeLabel.textColor = hasUnread ? .systemBlue : .secondaryLabel
+        timeLabel.textColor = hasUnread ? Theme.Colors.brand : Theme.Colors.secondaryText
+
+        // Unread chats glow softly.
+        cardView.layer.borderColor = hasUnread
+        ? Theme.Colors.gradientStart.withAlphaComponent(0.6).cgColor
+        : Theme.Colors.cardBorder.cgColor
+        cardView.layer.shadowOpacity = hasUnread ? 0.35 : 0
     }
 }
 
@@ -100,27 +131,44 @@ private extension ChatListCell {
 
     func setupUI() {
 
+        backgroundColor = .clear
+        selectionStyle = .none
+
+        cardView.layer.shadowColor = Theme.Colors.gradientStart.cgColor
+        cardView.layer.shadowRadius = 14
+        cardView.layer.shadowOffset = .zero
+
+        contentView.addSubview(cardView)
+
         [avatarView, nameLabel, messageLabel, timeLabel, badgeView].forEach {
-            contentView.addSubview($0)
+            cardView.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
         badgeView.addSubview(badgeLabel)
-        badgeLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        [cardView, badgeLabel].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
 
         NSLayoutConstraint.activate([
 
-            avatarView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            avatarView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
-            avatarView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10),
-            avatarView.widthAnchor.constraint(equalToConstant: 52),
-            avatarView.heightAnchor.constraint(equalToConstant: 52),
+            cardView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 5),
+            cardView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -5),
+            cardView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
+            cardView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
 
-            nameLabel.topAnchor.constraint(equalTo: avatarView.topAnchor, constant: 4),
-            nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 12),
+            avatarView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 14),
+            avatarView.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 14),
+            avatarView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -14),
+            avatarView.widthAnchor.constraint(equalToConstant: 54),
+            avatarView.heightAnchor.constraint(equalToConstant: 54),
+
+            nameLabel.topAnchor.constraint(equalTo: avatarView.topAnchor, constant: 5),
+            nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: 14),
             nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: timeLabel.leadingAnchor, constant: -8),
 
-            timeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            timeLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -16),
             timeLabel.firstBaselineAnchor.constraint(equalTo: nameLabel.firstBaselineAnchor),
 
             messageLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
@@ -129,11 +177,11 @@ private extension ChatListCell {
 
             badgeView.trailingAnchor.constraint(equalTo: timeLabel.trailingAnchor),
             badgeView.centerYAnchor.constraint(equalTo: messageLabel.centerYAnchor),
-            badgeView.heightAnchor.constraint(equalToConstant: 20),
-            badgeView.widthAnchor.constraint(greaterThanOrEqualToConstant: 20),
+            badgeView.heightAnchor.constraint(equalToConstant: 22),
+            badgeView.widthAnchor.constraint(greaterThanOrEqualToConstant: 22),
 
-            badgeLabel.leadingAnchor.constraint(equalTo: badgeView.leadingAnchor, constant: 6),
-            badgeLabel.trailingAnchor.constraint(equalTo: badgeView.trailingAnchor, constant: -6),
+            badgeLabel.leadingAnchor.constraint(equalTo: badgeView.leadingAnchor, constant: 7),
+            badgeLabel.trailingAnchor.constraint(equalTo: badgeView.trailingAnchor, constant: -7),
             badgeLabel.centerYAnchor.constraint(equalTo: badgeView.centerYAnchor)
         ])
     }

@@ -24,7 +24,7 @@ final class SplashViewModel {
     func checkAuthenticationStatus() {
 
         DispatchQueue.main.asyncAfter(
-            deadline: .now() + 2.0
+            deadline: .now() + 1.2
         ) { [weak self] in
 
             guard let self = self else { return }

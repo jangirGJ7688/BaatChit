@@ -37,7 +37,15 @@ final class BubbleView: UIView {
         }
     }
 
+    /// Fills the bubble with a gradient instead of a plain colour.
+    var gradientColors: [UIColor]? {
+        didSet {
+            updateGradient()
+        }
+    }
+
     private let maskLayer = CAShapeLayer()
+    private var gradientLayer: CAGradientLayer?
 
     // MARK: - Init
 
@@ -61,11 +69,37 @@ final class BubbleView: UIView {
         CATransaction.setDisableActions(true)
         maskLayer.frame = bounds
         maskLayer.path = makePath(in: bounds).cgPath
+        gradientLayer?.frame = bounds
         CATransaction.commit()
     }
 }
 
 private extension BubbleView {
+
+    func updateGradient() {
+
+        guard let gradientColors = gradientColors else {
+            gradientLayer?.removeFromSuperlayer()
+            gradientLayer = nil
+            return
+        }
+
+        let gradientLayer = self.gradientLayer ?? {
+            let layer = CAGradientLayer()
+            layer.startPoint = CGPoint(x: 0, y: 0)
+            layer.endPoint = CGPoint(x: 1, y: 1)
+            self.layer.insertSublayer(layer, at: 0)
+            self.gradientLayer = layer
+            return layer
+        }()
+
+        // Applied instantly, so reused cells don't fade between colours.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        gradientLayer.colors = gradientColors.map(\.cgColor)
+        gradientLayer.frame = bounds
+        CATransaction.commit()
+    }
 
     func makePath(in rect: CGRect) -> UIBezierPath {
 

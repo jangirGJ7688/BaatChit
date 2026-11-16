@@ -11,10 +11,16 @@ final class AppCoordinator: Coordinator {
 
     let navigationController: UINavigationController
 
+    private let popGestureDelegate = PopGestureDelegate()
+
     init(
         navigationController: UINavigationController
     ) {
         self.navigationController = navigationController
+
+        // Swipe-back keeps working on screens that hide the navigation bar.
+        popGestureDelegate.navigationController = navigationController
+        navigationController.interactivePopGestureRecognizer?.delegate = popGestureDelegate
     }
 
     func start() {
@@ -62,10 +68,7 @@ extension AppCoordinator {
             self?.showForgotPassword()
         }
 
-        navigationController.setViewControllers(
-            [loginVC],
-            animated: false
-        )
+        setRoot(loginVC)
     }
 
     func showSignup() {
@@ -124,10 +127,22 @@ extension AppCoordinator {
             self?.showMessageBanner(for: item)
         }
 
-        navigationController.setViewControllers(
-            [chatListVC],
-            animated: true
-        )
+        setRoot(chatListVC)
+    }
+
+    /// Replaces the whole screen stack with a cross-fade.
+    func setRoot(_ viewController: UIViewController) {
+
+        UIView.transition(
+            with: navigationController.view,
+            duration: 0.35,
+            options: .transitionCrossDissolve
+        ) {
+            self.navigationController.setViewControllers(
+                [viewController],
+                animated: false
+            )
+        }
     }
 
     func showNewChat() {
@@ -136,6 +151,9 @@ extension AppCoordinator {
         let newChatNavigationController = UINavigationController(
             rootViewController: newChatVC
         )
+
+        // A sheet that slides up, with a grabber to pull it down.
+        newChatNavigationController.sheetPresentationController?.prefersGrabberVisible = true
 
         newChatVC.onUserSelected = { [weak self, weak newChatNavigationController] user in
 
@@ -222,5 +240,16 @@ extension AppCoordinator {
             chatVC,
             animated: true
         )
+    }
+}
+
+/// Allows swipe-back except on the first screen, where it would freeze
+/// the navigation controller.
+private final class PopGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+
+    weak var navigationController: UINavigationController?
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        (navigationController?.viewControllers.count ?? 0) > 1
     }
 }

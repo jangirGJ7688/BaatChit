@@ -33,11 +33,14 @@ final class HomeViewModel {
     private var hasLoadedChats = false
 
     private(set) var items: [ChatListItem] = []
+    private(set) var currentUser: User?
+    private(set) var onlineUsers: [User] = []
 
     // MARK: - Outputs
 
     var onLoadingStateChange: ((Bool) -> Void)?
     var onItemsUpdated: (() -> Void)?
+    var onCurrentUserUpdated: (() -> Void)?
     var onIncomingMessage: ((ChatListItem) -> Void)?
     var onError: ((String) -> Void)?
 
@@ -64,6 +67,8 @@ final class HomeViewModel {
         }
 
         currentUserId = currentUser.uid
+        self.currentUser = currentUser
+        onCurrentUserUpdated?()
 
         // Make sure the current user has a profile, so other users can
         // find them (covers accounts created before profiles existed).
@@ -90,6 +95,17 @@ final class HomeViewModel {
                             users.map { ($0.uid, $0) },
                             uniquingKeysWith: { first, _ in first }
                         )
+
+                        self.onlineUsers = users.filter {
+                            $0.isOnline && $0.uid != currentUser.uid
+                        }
+
+                        // Your own profile, for the photo in the top bar.
+                        if let me = self.usersById[currentUser.uid],
+                           me != self.currentUser {
+                            self.currentUser = me
+                            self.onCurrentUserUpdated?()
+                        }
 
                         self.rebuildItems()
 

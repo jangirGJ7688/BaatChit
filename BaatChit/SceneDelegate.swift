@@ -21,10 +21,17 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         let window = UIWindow(windowScene: windowScene)
 
+        Theme.applyGlobalAppearance()
+        window.tintColor = Theme.Colors.brand
+
+        // The Dark Luxe look is designed for dark mode only.
+        window.overrideUserInterfaceStyle = .dark
+
         // Create Navigation Controller
         let navigationController = UINavigationController()
 
         navigationController.navigationBar.isHidden = true
+        navigationController.navigationBar.prefersLargeTitles = true
 
         // Create App Coordinator
         let appCoordinator = AppCoordinator(

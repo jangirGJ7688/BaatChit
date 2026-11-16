@@ -7,8 +7,8 @@
 
 import UIKit
 
-/// Photo button, a text box that grows up to five lines, and a send button
-/// that only lights up when there's something to send.
+/// Photo button, a text box that grows up to five lines, and a round
+/// gradient send button that pops in once there's something to send.
 final class ChatInputBar: UIView {
 
     // MARK: - Properties
@@ -17,12 +17,17 @@ final class ChatInputBar: UIView {
     var onAttach: (() -> Void)?
     var onTextChange: ((String) -> Void)?
 
-    private let minTextHeight: CGFloat = 36
+    private let minTextHeight: CGFloat = 38
     private let maxTextHeight: CGFloat = 120
 
     private var textViewHeightConstraint: NSLayoutConstraint!
+    private var isSendVisible = false
 
     // MARK: - UI Components
+
+    private let blurView = UIVisualEffectView(
+        effect: UIBlurEffect(style: .systemChromeMaterial)
+    )
 
     private let separatorView: UIView = {
         let view = UIView()
@@ -35,19 +40,23 @@ final class ChatInputBar: UIView {
 
         button.setImage(
             UIImage(
-                systemName: "photo.on.rectangle",
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 20)
+                systemName: "plus",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
             ),
             for: .normal
         )
+
+        button.tintColor = Theme.Colors.brand
+        button.backgroundColor = Theme.Colors.brand.withAlphaComponent(0.12)
+        button.layer.cornerRadius = 19
 
         return button
     }()
 
     private let textContainer: UIView = {
         let view = UIView()
-        view.backgroundColor = .secondarySystemBackground
-        view.layer.cornerRadius = 18
+        view.backgroundColor = Theme.Colors.fieldBackground
+        view.layer.cornerRadius = 19
         return view
     }()
 
@@ -56,7 +65,7 @@ final class ChatInputBar: UIView {
         textView.font = .systemFont(ofSize: 16)
         textView.backgroundColor = .clear
         textView.isScrollEnabled = false
-        textView.textContainerInset = UIEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        textView.textContainerInset = UIEdgeInsets(top: 9, left: 10, bottom: 9, right: 10)
         return textView
     }()
 
@@ -69,19 +78,27 @@ final class ChatInputBar: UIView {
     }()
 
     private let sendButton: UIButton = {
-        let button = UIButton(type: .system)
+        let button = UIButton(type: .custom)
 
         button.setImage(
             UIImage(
-                systemName: "arrow.up.circle.fill",
-                withConfiguration: UIImage.SymbolConfiguration(pointSize: 30)
+                systemName: "arrow.up",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .bold)
             ),
             for: .normal
         )
 
-        button.isEnabled = false
+        button.tintColor = .white
+        button.layer.cornerRadius = 19
+        button.clipsToBounds = true
 
         return button
+    }()
+
+    private let sendGradientView: GradientView = {
+        let view = GradientView()
+        view.isUserInteractionEnabled = false
+        return view
     }()
 
     // MARK: - Init
@@ -91,6 +108,7 @@ final class ChatInputBar: UIView {
 
         setupUI()
         setupActions()
+        setSendVisible(false, animated: false)
     }
 
     required init?(coder: NSCoder) {
@@ -102,11 +120,11 @@ private extension ChatInputBar {
 
     func setupUI() {
 
-        backgroundColor = .systemBackground
-
         textView.delegate = self
 
-        [separatorView, attachButton, textContainer, sendButton].forEach {
+        sendButton.insertSubview(sendGradientView, at: 0)
+
+        [blurView, separatorView, attachButton, textContainer, sendButton].forEach {
             addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
@@ -116,11 +134,19 @@ private extension ChatInputBar {
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
+        sendGradientView.translatesAutoresizingMaskIntoConstraints = false
+
         textViewHeightConstraint = textView.heightAnchor.constraint(
             equalToConstant: minTextHeight
         )
 
         NSLayoutConstraint.activate([
+
+            // The blur reaches below the bar, behind the home indicator.
+            blurView.topAnchor.constraint(equalTo: topAnchor),
+            blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            blurView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: 100),
 
             separatorView.topAnchor.constraint(equalTo: topAnchor),
             separatorView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -128,15 +154,15 @@ private extension ChatInputBar {
             separatorView.heightAnchor.constraint(equalToConstant: 0.5),
 
             // Buttons stay next to the last line as the text box grows.
-            attachButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            attachButton.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             attachButton.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
-            attachButton.widthAnchor.constraint(equalToConstant: 36),
-            attachButton.heightAnchor.constraint(equalToConstant: 36),
+            attachButton.widthAnchor.constraint(equalToConstant: 38),
+            attachButton.heightAnchor.constraint(equalToConstant: 38),
 
             textContainer.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             textContainer.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
-            textContainer.leadingAnchor.constraint(equalTo: attachButton.trailingAnchor, constant: 4),
-            textContainer.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -6),
+            textContainer.leadingAnchor.constraint(equalTo: attachButton.trailingAnchor, constant: 8),
+            textContainer.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -8),
 
             textView.topAnchor.constraint(equalTo: textContainer.topAnchor),
             textView.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
@@ -144,33 +170,30 @@ private extension ChatInputBar {
             textView.trailingAnchor.constraint(equalTo: textContainer.trailingAnchor, constant: -4),
             textViewHeightConstraint,
 
-            placeholderLabel.leadingAnchor.constraint(equalTo: textView.leadingAnchor, constant: 13),
+            placeholderLabel.leadingAnchor.constraint(equalTo: textView.leadingAnchor, constant: 15),
             placeholderLabel.centerYAnchor.constraint(equalTo: textContainer.centerYAnchor),
 
-            sendButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            sendButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             sendButton.bottomAnchor.constraint(equalTo: textContainer.bottomAnchor),
-            sendButton.widthAnchor.constraint(equalToConstant: 36),
-            sendButton.heightAnchor.constraint(equalToConstant: 36)
+            sendButton.widthAnchor.constraint(equalToConstant: 38),
+            sendButton.heightAnchor.constraint(equalToConstant: 38),
+
+            sendGradientView.topAnchor.constraint(equalTo: sendButton.topAnchor),
+            sendGradientView.leadingAnchor.constraint(equalTo: sendButton.leadingAnchor),
+            sendGradientView.trailingAnchor.constraint(equalTo: sendButton.trailingAnchor),
+            sendGradientView.bottomAnchor.constraint(equalTo: sendButton.bottomAnchor)
         ])
     }
 
     func setupActions() {
 
-        attachButton.addTarget(
-            self,
-            action: #selector(attachTapped),
-            for: .touchUpInside
-        )
-
-        sendButton.addTarget(
-            self,
-            action: #selector(sendTapped),
-            for: .touchUpInside
-        )
+        attachButton.addTarget(self, action: #selector(attachTapped), for: .touchUpInside)
+        sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
     }
 
     @objc
     func attachTapped() {
+        Haptics.tap()
         onAttach?()
     }
 
@@ -181,12 +204,47 @@ private extension ChatInputBar {
 
         guard !text.isEmpty else { return }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Haptics.tap()
 
         onSend?(text)
 
         textView.text = ""
         textViewDidChange(textView)
+    }
+
+    /// The send button pops in when there's text, and shrinks away when not.
+    func setSendVisible(
+        _ isVisible: Bool,
+        animated: Bool
+    ) {
+
+        guard isVisible != isSendVisible || !animated else { return }
+
+        isSendVisible = isVisible
+        sendButton.isEnabled = isVisible
+
+        let changes = {
+            self.sendButton.alpha = isVisible ? 1 : 0.35
+            self.sendButton.transform = isVisible
+            ? .identity
+            : CGAffineTransform(scaleX: 0.75, y: 0.75)
+            self.sendGradientView.alpha = isVisible ? 1 : 0
+            self.sendButton.backgroundColor = isVisible ? .clear : .systemGray3
+        }
+
+        guard animated else {
+            changes()
+            return
+        }
+
+        UIView.animate(
+            withDuration: 0.35,
+            delay: 0,
+            usingSpringWithDamping: 0.6,
+            initialSpringVelocity: 0.8,
+            options: [.beginFromCurrentState, .allowUserInteraction],
+            animations: changes
+        )
     }
 
     func updateTextViewHeight() {
@@ -221,7 +279,7 @@ extension ChatInputBar: UITextViewDelegate {
             .isEmpty
 
         placeholderLabel.isHidden = !textView.text.isEmpty
-        sendButton.isEnabled = hasText
+        setSendVisible(hasText, animated: true)
 
         updateTextViewHeight()
 

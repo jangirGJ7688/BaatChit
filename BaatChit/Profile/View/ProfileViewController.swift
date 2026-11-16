@@ -16,44 +16,111 @@ final class ProfileViewController: UIViewController {
 
     var onLogout: (() -> Void)?
 
+    private var hasAnimatedIn = false
+
     // MARK: - UI Components
+
+    private let scrollView: UIScrollView = {
+        let scrollView = UIScrollView()
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.alwaysBounceVertical = true
+        return scrollView
+    }()
+
+    private let headerView: GradientView = {
+        let view = GradientView()
+        view.layer.cornerRadius = Theme.Radius.large
+        view.layer.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+        view.clipsToBounds = true
+        return view
+    }()
+
+    private let backButton: UIButton = {
+        let button = UIButton(type: .system)
+
+        button.setImage(
+            UIImage(
+                systemName: "chevron.left",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
+            ),
+            for: .normal
+        )
+
+        button.tintColor = .white
+        button.backgroundColor = UIColor.white.withAlphaComponent(0.2)
+        button.layer.cornerRadius = 20
+
+        return button
+    }()
+
+    private let titleLabel: UILabel = {
+        let label = UILabel()
+        label.text = "Profile"
+        label.font = Theme.Fonts.rounded(17, weight: .semibold)
+        label.textColor = .white
+        return label
+    }()
+
+    /// White ring around the photo.
+    private let avatarRing: UIView = {
+        let view = UIView()
+        view.backgroundColor = Theme.Colors.background
+        view.layer.cornerRadius = 62
+        view.layer.shadowColor = Theme.Colors.gradientStart.cgColor
+        view.layer.shadowOpacity = 0.6
+        view.layer.shadowRadius = 18
+        view.layer.shadowOffset = .zero
+        return view
+    }()
 
     private let avatarView = AvatarView()
 
-    private let changePhotoButton: UIButton = {
+    private let cameraButton: UIButton = {
         let button = UIButton(type: .system)
-        button.setTitle("Change Photo", for: .normal)
+
+        button.setImage(
+            UIImage(
+                systemName: "camera.fill",
+                withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+            ),
+            for: .normal
+        )
+
+        button.tintColor = .white
+        button.backgroundColor = Theme.Colors.brand
+        button.layer.cornerRadius = 18
+        button.layer.borderWidth = 3
+        button.layer.borderColor = Theme.Colors.background.cgColor
+
         return button
+    }()
+
+    private let photoActivityIndicator: UIActivityIndicatorView = {
+        let indicator = UIActivityIndicatorView(style: .large)
+        indicator.color = .white
+        indicator.hidesWhenStopped = true
+        return indicator
     }()
 
     private let nameLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 24, weight: .bold)
+        label.textColor = .white
+        label.font = Theme.Fonts.rounded(26, weight: .bold)
         label.textAlignment = .center
+        label.numberOfLines = 0
         return label
     }()
 
     private let emailLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 16)
-        label.textColor = .secondaryLabel
+        label.font = Theme.Fonts.rounded(16)
+        label.textColor = Theme.Colors.secondaryText
         label.textAlignment = .center
         return label
     }()
 
-    private let logoutButton: UIButton = {
-        let button = UIButton(type: .system)
-
-        button.setTitle("Logout", for: .normal)
-        button.setTitleColor(.systemRed, for: .normal)
-        button.backgroundColor = .secondarySystemBackground
-        button.layer.cornerRadius = 14
-        button.titleLabel?.font = .boldSystemFont(ofSize: 18)
-
-        return button
-    }()
-
-    private let activityIndicator = UIActivityIndicatorView(style: .large)
+    private let accountCard = SettingsCardView()
+    private let actionsCard = SettingsCardView()
 
     // MARK: - Init
 
@@ -81,7 +148,21 @@ final class ProfileViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
-        navigationController?.setNavigationBarHidden(false, animated: animated)
+        // This screen draws its own header instead of the navigation bar.
+        navigationController?.setNavigationBarHidden(true, animated: animated)
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        guard !hasAnimatedIn else { return }
+
+        hasAnimatedIn = true
+        UIView.animateEntrance(of: [nameLabel, emailLabel, accountCard, actionsCard])
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        .lightContent
     }
 }
 
@@ -91,46 +172,110 @@ private extension ProfileViewController {
 
     func setupUI() {
 
-        title = "Profile"
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = Theme.Colors.groupedBackground
 
-        [
-            avatarView,
-            changePhotoButton,
-            nameLabel,
-            emailLabel,
-            logoutButton,
-            activityIndicator
-        ].forEach {
-            view.addSubview($0)
+        view.addSubview(scrollView)
+
+        [headerView, avatarRing, cameraButton, nameLabel, emailLabel, accountCard, actionsCard].forEach {
+            scrollView.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
 
+        [backButton, titleLabel].forEach {
+            headerView.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        [avatarView, photoActivityIndicator].forEach {
+            avatarRing.addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+
+        accountCard.addRow(
+            iconName: "envelope.fill",
+            title: "Email",
+            tint: Theme.Colors.brand
+        )
+
+        accountCard.addRow(
+            iconName: "photo.fill",
+            title: "Change profile photo",
+            showsChevron: true,
+            tint: .systemPink
+        ) { [weak self] in
+            self?.showPhotoPicker()
+        }
+
+        actionsCard.addRow(
+            iconName: "rectangle.portrait.and.arrow.right",
+            title: "Log Out",
+            tint: Theme.Colors.error,
+            isDestructive: true
+        ) { [weak self] in
+            self?.confirmLogout()
+        }
+
+        let content = scrollView.contentLayoutGuide
+        let safeArea = view.safeAreaLayoutGuide
+
         NSLayoutConstraint.activate([
 
-            avatarView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 32),
-            avatarView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            avatarView.widthAnchor.constraint(equalToConstant: 120),
-            avatarView.heightAnchor.constraint(equalToConstant: 120),
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            changePhotoButton.topAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: 12),
-            changePhotoButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            headerView.topAnchor.constraint(equalTo: content.topAnchor),
+            headerView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            headerView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            headerView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
+            headerView.bottomAnchor.constraint(equalTo: safeArea.topAnchor, constant: 130),
 
-            nameLabel.topAnchor.constraint(equalTo: changePhotoButton.bottomAnchor, constant: 24),
-            nameLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            nameLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            backButton.topAnchor.constraint(equalTo: safeArea.topAnchor, constant: 8),
+            backButton.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 20),
+            backButton.widthAnchor.constraint(equalToConstant: 40),
+            backButton.heightAnchor.constraint(equalToConstant: 40),
 
-            emailLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 8),
+            titleLabel.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: backButton.centerYAnchor),
+
+            // The photo overlaps the bottom edge of the header.
+            avatarRing.centerXAnchor.constraint(equalTo: headerView.centerXAnchor),
+            avatarRing.centerYAnchor.constraint(equalTo: headerView.bottomAnchor),
+            avatarRing.widthAnchor.constraint(equalToConstant: 124),
+            avatarRing.heightAnchor.constraint(equalToConstant: 124),
+
+            avatarView.centerXAnchor.constraint(equalTo: avatarRing.centerXAnchor),
+            avatarView.centerYAnchor.constraint(equalTo: avatarRing.centerYAnchor),
+            avatarView.widthAnchor.constraint(equalToConstant: 116),
+            avatarView.heightAnchor.constraint(equalToConstant: 116),
+
+            photoActivityIndicator.centerXAnchor.constraint(equalTo: avatarRing.centerXAnchor),
+            photoActivityIndicator.centerYAnchor.constraint(equalTo: avatarRing.centerYAnchor),
+
+            cameraButton.trailingAnchor.constraint(equalTo: avatarRing.trailingAnchor, constant: -2),
+            cameraButton.bottomAnchor.constraint(equalTo: avatarRing.bottomAnchor, constant: -2),
+            cameraButton.widthAnchor.constraint(equalToConstant: 36),
+            cameraButton.heightAnchor.constraint(equalToConstant: 36),
+
+            nameLabel.topAnchor.constraint(equalTo: avatarRing.bottomAnchor, constant: 16),
+            nameLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
+            nameLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
+
+            emailLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 4),
             emailLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             emailLabel.trailingAnchor.constraint(equalTo: nameLabel.trailingAnchor),
 
-            logoutButton.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: 48),
-            logoutButton.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
-            logoutButton.trailingAnchor.constraint(equalTo: nameLabel.trailingAnchor),
-            logoutButton.heightAnchor.constraint(equalToConstant: 56),
+            accountCard.topAnchor.constraint(equalTo: emailLabel.bottomAnchor, constant: 28),
+            accountCard.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            accountCard.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
 
-            activityIndicator.centerXAnchor.constraint(equalTo: avatarView.centerXAnchor),
-            activityIndicator.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor)
+            actionsCard.topAnchor.constraint(equalTo: accountCard.bottomAnchor, constant: 20),
+            actionsCard.leadingAnchor.constraint(equalTo: accountCard.leadingAnchor),
+            actionsCard.trailingAnchor.constraint(equalTo: accountCard.trailingAnchor),
+            actionsCard.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -32)
         ])
     }
 }
@@ -141,21 +286,23 @@ private extension ProfileViewController {
 
     func setupActions() {
 
-        changePhotoButton.addTarget(
-            self,
-            action: #selector(changePhotoTapped),
-            for: .touchUpInside
-        )
-
-        logoutButton.addTarget(
-            self,
-            action: #selector(logoutTapped),
-            for: .touchUpInside
-        )
+        backButton.addTarget(self, action: #selector(backTapped), for: .touchUpInside)
+        cameraButton.addTarget(self, action: #selector(cameraTapped), for: .touchUpInside)
     }
 
     @objc
-    func changePhotoTapped() {
+    func backTapped() {
+        Haptics.tap()
+        navigationController?.popViewController(animated: true)
+    }
+
+    @objc
+    func cameraTapped() {
+        Haptics.tap()
+        showPhotoPicker()
+    }
+
+    func showPhotoPicker() {
 
         var configuration = PHPickerConfiguration()
         configuration.filter = .images
@@ -167,9 +314,24 @@ private extension ProfileViewController {
         present(picker, animated: true)
     }
 
-    @objc
-    func logoutTapped() {
-        viewModel.logout()
+    /// Logging out is easy to hit by accident, so ask first.
+    func confirmLogout() {
+
+        let sheet = UIAlertController(
+            title: "Log out of BaatChit?",
+            message: nil,
+            preferredStyle: .actionSheet
+        )
+
+        sheet.addAction(
+            UIAlertAction(title: "Log Out", style: .destructive) { [weak self] _ in
+                self?.viewModel.logout()
+            }
+        )
+
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+
+        present(sheet, animated: true)
     }
 }
 
@@ -187,18 +349,19 @@ private extension ProfileViewController {
             self.avatarView.configure(with: user, showsOnlineStatus: false)
             self.nameLabel.text = user.displayName
             self.emailLabel.text = user.email
+            self.accountCard.updateDetail(user.email, atRow: 0)
         }
 
         viewModel.onLoadingStateChange = { [weak self] isLoading in
 
             if isLoading {
-                self?.activityIndicator.startAnimating()
+                self?.photoActivityIndicator.startAnimating()
             } else {
-                self?.activityIndicator.stopAnimating()
+                self?.photoActivityIndicator.stopAnimating()
             }
 
-            self?.changePhotoButton.isEnabled = !isLoading
-            self?.logoutButton.isEnabled = !isLoading
+            self?.avatarView.alpha = isLoading ? 0.5 : 1
+            self?.view.isUserInteractionEnabled = !isLoading
         }
 
         viewModel.onLogout = { [weak self] in
